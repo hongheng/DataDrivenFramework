@@ -1,35 +1,30 @@
 ﻿using System;
 using UnityEngine;
 
-namespace HH.DataDrivenFramework {
-
-    public interface IDataDrivenView {
+namespace HH.DataDrivenFramework
+{
+    public interface IDataDrivenView
+    {
+        bool AutoRegister { get; }
         Type DataType { get; }
         float UpdateView(object model);
     }
 
-    public abstract class DataDrivenView : MonoBehaviour, IDataDrivenView {
-        public abstract Type DataType { get; }
-        public abstract float UpdateView(object model);
-    }
+    public abstract class DataDrivenView<T> : MonoBehaviour, IDataDrivenView
+    {
+        [SerializeField] bool autoRegister;
+        [SerializeField] float blockTime;
 
-    public abstract class DataDrivenView<T> : DataDrivenView {
+        public Type DataType => typeof(T);
 
-        public float blockTime;
+        public bool AutoRegister => autoRegister;
 
-        public override float UpdateView(object model) {
+        public float UpdateView(object model) {
             var block = blockTime;
             UpdateView((T)model, ref block);
             return block;
         }
 
-        public override Type DataType {
-            get {
-                return typeof(T);
-            }
-        }
-
         protected abstract void UpdateView(T model, ref float blockTime);
-
     }
 }

@@ -1,66 +1,65 @@
 ﻿using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
-namespace HH.DataDrivenFramework {
+namespace HH.DataDrivenFramework
+{
+    public class DataDrivenViewHub
+    {
+        class HandlerTable : Dictionary<IDataDrivenView, Func<object, float>> { }
+        class TypeLookup : Dictionary<Type, HandlerTable> { }
 
-    public class DataDrivenViewHub : MonoBehaviour {
+        TypeLookup hub = new TypeLookup();
 
-        public SceneType scene;
-        public DataDrivenView[] views;
-
-        class Handlers : GroupedDictionary<DataDrivenView, Type, Func<object, float>> { }
-        Handlers handlers;
-        DataQueue queue;
-
-        void Awake() {
-            handlers = new Handlers();
-            foreach (var view in views) {
-                handlers.Add(view, view.DataType, view.UpdateView);
+        public void RegiterView(IDataDrivenView view) {
+            var type = view.DataType;
+            if (!hub.ContainsKey(type)) {
+                hub.Add(type, new HandlerTable());
             }
-            queue = SceneControllerHub.Instance.RegisterScene(scene);
-            StartCoroutine(WorkLoop());
-        }
-
-        void OnDestroy() {
-            queue = null;
-            SceneControllerHub.Instance.UnregisterScene(scene);
-            foreach (var view in views) {
-                handlers.Remove(view);
+            if (hub[type].ContainsKey(view)) {
+                hub[type][view] = view.UpdateView;
+            } else {
+                hub[type].Add(view, view.UpdateView);
             }
         }
 
-        IEnumerator WorkLoop() {
-            while (queue != null) {
-                while (queue.Count > 0) {
-                    var data = queue.Dequeue();
-                    var tBlockAll = 0f;
-                    //Debug.LogFormat("DataDrivenViewHub:{0}", data);
-                    handlers.ForEach(data.GetType(), (view, handle) => {
-                        var tBlock = 0f;
-                        try {
-                            tBlock = handle(data);
-                        } catch (Exception ex) {
-                            Debug.LogErrorFormat("ViewData {1} @ {0} : {2}", view, data, ex);
-                        }
-                        if (tBlock > tBlockAll) {
-                            tBlockAll = tBlock;
-                        }
-                    });
-                    if (tBlockAll > 0) {
-                        //Debug.LogFormat("DataDrivenViewHub:{0}s", tBlockAll);
-                        yield return new WaitForSeconds(tBlockAll);
+        public void UnRegisterView(Func<Type, IDataDrivenView, bool> needUnregister) {
+            foreach (var handlers in hub) {
+                foreach (var view in handlers.Value.Keys) {
+                    if (needUnregister(handlers.Key, view)) {
+                        handlers.Value.Remove(view);
                     }
                 }
-                yield return new WaitForSeconds(0);
             }
         }
 
-#if UNITY_EDITOR
-        [ContextMenu("自动加载")]
-        void 自动加载() {
-            views = FindObjectsOfType<DataDrivenView>();
+        public void Clear() {
+            hub.Clear();
         }
-#endif
+
+        public float Dispatch(object data) {
+            var type = data.GetType();
+            var list = hub.ContainsKey(type) ? hub[type] : null;
+            var count = list == null ? 0 : list.Count;
+            Debug.LogFormat("Dispatch {0} => {1} view. {2}", type.Name, count, data);
+            if (count == 0) {
+                return 0;
+            }
+            var tBlockAll = 0f;
+            foreach (var handler in list) {
+                var tBlock = 0f;
+                try {
+                    tBlock = handler.Value(data);
+                } catch (Exception ex) {
+                    Debug.LogException(ex);
+                }
+                if (tBlock > tBlockAll) {
+                    tBlockAll = tBlock;
+                }
+            }
+            return tBlockAll;
+        }
     }
 }
