@@ -14,26 +14,36 @@ namespace HH.DataDrivenFramework
 
     public interface IViewModelDispatcher
     {
-        void StartDispatch(ViewModelQueue qViewModel, Func<object, float> runViewModel);
+        void StartDispatch(object taskId, ViewModelQueue qViewModel, Func<object, float> runViewModel);
+        void StopDispatch(object taskId);
         void Reset();
     }
 
     public class ViewModelDispatcher : IViewModelDispatcher
     {
         MonoBehaviour monoBehaviour;
-        List<Coroutine> dispatching;
+        Dictionary<object, Coroutine> dispatching;
 
         public ViewModelDispatcher(MonoBehaviour monoBehaviour) {
             this.monoBehaviour = monoBehaviour;
-            dispatching = new List<Coroutine>();
+            dispatching = new Dictionary<object, Coroutine>();
         }
 
-        public void StartDispatch(ViewModelQueue qViewModel, Func<object, float> runViewModel) {
-            dispatching.Add(monoBehaviour.StartCoroutine(Dispatch(qViewModel, runViewModel)));
+        public void StartDispatch(object taskId, ViewModelQueue qViewModel, Func<object, float> runViewModel) {
+            dispatching.Add(taskId, monoBehaviour.StartCoroutine(Dispatch(qViewModel, runViewModel)));
+        }
+
+        public void StopDispatch(object taskId) {
+            if (dispatching.ContainsKey(taskId)) {
+                monoBehaviour.StopCoroutine(dispatching[taskId]);
+                dispatching.Remove(taskId);
+            }
         }
 
         public void Reset() {
-            dispatching.ForEach(cor => monoBehaviour.StopCoroutine(cor));
+            foreach (var taskId in dispatching.Keys) {
+                StopDispatch(taskId);
+            }
         }
 
         IEnumerator Dispatch(ViewModelQueue qViewModel, Func<object, float> runViewModel) {
