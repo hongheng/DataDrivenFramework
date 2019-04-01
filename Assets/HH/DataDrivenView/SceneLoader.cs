@@ -9,9 +9,6 @@ namespace HH.DataDrivenFramework
 {
     public class SceneLoader
     {
-        static SceneLoader instance;
-        public static SceneLoader Instance { get { return instance = instance ?? new SceneLoader(); } }
-
         public class Config
         {
             public int mainSceneBuildIdx;
@@ -27,20 +24,23 @@ namespace HH.DataDrivenFramework
         }
 
         List<SceneData> currentScene = new List<SceneData>();
-        ViewModelDispatcher dispatcher;
+        IViewModelDispatcher dispatcher;
         DataDrivenViewHub viewHub;
-        
-        SceneLoader() {
+
+        public SceneLoader(MonoBehaviour monoBehaviour) : this(new ViewModelDispatcher(monoBehaviour)) {}
+
+        public SceneLoader(IViewModelDispatcher viewModelDispatcher) {
+            dispatcher = viewModelDispatcher;
             viewHub = new DataDrivenViewHub();
-            dispatcher = new ViewModelDispatcher();
             SceneManager.sceneLoaded += OnSceneLoaded;
             SceneManager.sceneUnloaded += OnSceneUnloaded;
             SceneManager.activeSceneChanged += OnActiveSceneChanged;
         }
 
         public void LoadScene(Config cfg, LoadSceneMode mode = LoadSceneMode.Single) {
-           var scenes = new HashSet<int>(cfg.subScenesBuildIdx) { cfg.mainSceneBuildIdx };
+            var scenes = new HashSet<int>(cfg.subScenesBuildIdx) { cfg.mainSceneBuildIdx };
             if (mode == LoadSceneMode.Single) {
+                dispatcher.Reset();
                 currentScene.Clear();
             } else {
                 var notLoaded = scenes.Where(s => !SceneManager.GetSceneByBuildIndex(s).isLoaded);
