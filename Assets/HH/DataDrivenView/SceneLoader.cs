@@ -7,20 +7,26 @@ using System.Linq;
 
 namespace HH.DataDrivenFramework
 {
-    public class SceneLoaderConfig
-    {
-        public int buildIdx;
-        public int[] subScenes;
-        public Func<ISceneController> GetCtrler;
-    }
-
     public class SceneLoader
     {
         static SceneLoader instance;
         public static SceneLoader Instance { get { return instance = instance ?? new SceneLoader(); } }
 
-        SceneLoaderConfig curCfg;
-        ISceneController curCtrler;
+        public class Config
+        {
+            public int mainSceneBuildIdx;
+            public int[] subScenesBuildIdx;
+            public Func<ISceneController> GetCtrler;
+        }
+
+        struct SceneData
+        {
+            public Config cfg;
+            public ISceneController ctrler;
+            public HashSet<int> scenesNeedLoaded;
+        }
+
+        List<SceneData> currentScene = new List<SceneData>();
         ViewModelDispatcher dispatcher;
         DataDrivenViewHub viewHub;
         
@@ -32,12 +38,22 @@ namespace HH.DataDrivenFramework
             SceneManager.activeSceneChanged += OnActiveSceneChanged;
         }
 
-        public void LoadScene(SceneLoaderConfig cfg) {
-            curCfg = cfg;
-            curCtrler = cfg.GetCtrler();
-            SceneManager.LoadScene(cfg.buildIdx);
-            if (cfg.subScenes != null) {
-                foreach (var subscene in cfg.subScenes) {
+        public void LoadScene(Config cfg, LoadSceneMode mode = LoadSceneMode.Single) {
+           var scenes = new HashSet<int>(cfg.subScenesBuildIdx) { cfg.mainSceneBuildIdx };
+            if (mode == LoadSceneMode.Single) {
+                currentScene.Clear();
+            } else {
+                var notLoaded = scenes.Where(s => !SceneManager.GetSceneByBuildIndex(s).isLoaded);
+                scenes = new HashSet<int>(notLoaded);
+            }
+            currentScene.Add(new SceneData {
+                cfg = cfg,
+                ctrler = cfg.GetCtrler(),
+                scenesNeedLoaded = scenes,
+            });
+            SceneManager.LoadScene(cfg.mainSceneBuildIdx, mode);
+            if (cfg.subScenesBuildIdx != null) {
+                foreach (var subscene in cfg.subScenesBuildIdx) {
                     SceneManager.LoadScene(subscene, LoadSceneMode.Additive);
                 }
             }
@@ -59,13 +75,11 @@ namespace HH.DataDrivenFramework
                     }
                 }
             }
-            if (curCtrler != null) {
-                curCtrler.OnSceneLoaded(scene);
-                if (curCfg != null && SceneManager.GetSceneByBuildIndex(curCfg.buildIdx).isLoaded) {
-                    if (curCfg.subScenes != null) {
-                        if (curCfg.subScenes.Select(SceneManager.GetSceneByBuildIndex).All(s => s.isLoaded)) {
-                            dispatcher.StartDispatch(curCtrler.QueueViewModel, viewHub.Dispatch);
-                        }
+            foreach (var sceneData in currentScene) {
+                sceneData.ctrler.OnSceneLoaded(scene);
+                if (sceneData.scenesNeedLoaded.Remove(scene.buildIndex)) {
+                    if (sceneData.scenesNeedLoaded.Count == 0) {
+                        dispatcher.StartDispatch(sceneData.ctrler.QueueViewModel, viewHub.Dispatch);
                     }
                 }
             }
@@ -80,8 +94,8 @@ namespace HH.DataDrivenFramework
                 }
                 return rm;
             });
-            if (curCtrler != null) {
-                curCtrler.OnSceneUnloaded(scene);
+            foreach (var sceneData in currentScene) {
+                sceneData.ctrler.OnSceneUnloaded(scene);
             }
         }
 
