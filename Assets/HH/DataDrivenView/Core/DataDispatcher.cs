@@ -3,34 +3,34 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-namespace HH.DataDrivenFramework
+namespace HH.DataDrivenScene.Core
 {
-    public class ViewModel
+    public class DispatchData
     {
         public object viewData;
     }
 
-    public class ViewModelQueue : Queue<ViewModel> { }
+    public class DispatchQueue : Queue<DispatchData> { }
 
-    public interface IViewModelDispatcher
+    public interface IDataDispatcher
     {
-        void StartDispatch(object taskId, ViewModelQueue qViewModel, Func<object, float> runViewModel);
+        void StartDispatch(object taskId, DispatchQueue dispatchQueue, Func<object, float> runViewModel);
         void StopDispatch(object taskId);
         void Reset();
     }
 
-    public class ViewModelDispatcher : IViewModelDispatcher
+    public class DataDispatcher : IDataDispatcher
     {
         MonoBehaviour monoBehaviour;
         Dictionary<object, Coroutine> dispatching;
 
-        public ViewModelDispatcher(MonoBehaviour monoBehaviour) {
+        public DataDispatcher(MonoBehaviour monoBehaviour) {
             this.monoBehaviour = monoBehaviour;
             dispatching = new Dictionary<object, Coroutine>();
         }
 
-        public void StartDispatch(object taskId, ViewModelQueue qViewModel, Func<object, float> runViewModel) {
-            dispatching.Add(taskId, monoBehaviour.StartCoroutine(Dispatch(qViewModel, runViewModel)));
+        public void StartDispatch(object taskId, DispatchQueue dispatchQueue, Func<object, float> runViewModel) {
+            dispatching.Add(taskId, monoBehaviour.StartCoroutine(Dispatch(dispatchQueue, runViewModel)));
         }
 
         public void StopDispatch(object taskId) {
@@ -46,7 +46,7 @@ namespace HH.DataDrivenFramework
             }
         }
 
-        IEnumerator Dispatch(ViewModelQueue qViewModel, Func<object, float> runViewModel) {
+        IEnumerator Dispatch(DispatchQueue qViewModel, Func<object, float> runViewModel) {
             while (true) {
                 while (qViewModel.Count > 0) {
                     var model = qViewModel.Dequeue();

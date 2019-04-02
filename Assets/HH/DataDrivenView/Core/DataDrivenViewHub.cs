@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
-namespace HH.DataDrivenFramework
+namespace HH.DataDrivenScene.Core
 {
     public class DataDrivenViewHub
     {

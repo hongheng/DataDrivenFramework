@@ -1,21 +1,22 @@
 ﻿using UnityEngine;
 using System.Collections;
 using UnityEngine.SceneManagement;
+using HH.DataDrivenScene.Core;
 
-namespace HH.DataDrivenFramework
+namespace HH.DataDrivenScene
 {
     public interface ISceneController
     {
-        ViewModelQueue QueueViewModel { get; }
+        DispatchQueue QueueToDispatch { get; }
         void OnSceneLoaded(Scene scene);
         void OnSceneUnloaded(Scene scene);
     }
 
     public abstract class SceneController : ISceneController
     {
-        ViewModelQueue queueView = new ViewModelQueue();
+        DispatchQueue queueToDispatch = new DispatchQueue();
 
-        public ViewModelQueue QueueViewModel => queueView;
+        public DispatchQueue QueueToDispatch => queueToDispatch;
         
         public virtual void OnSceneLoaded(Scene scene) {
         }
@@ -24,7 +25,7 @@ namespace HH.DataDrivenFramework
         }
 
         protected void PushToView(object model) {
-            queueView.Enqueue(new ViewModel { viewData = model });
+            queueToDispatch.Enqueue(new DispatchData { viewData = model });
         }
     }
 }
