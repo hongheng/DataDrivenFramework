@@ -6,11 +6,11 @@ namespace HH.DataDrivenScene
 {
     public class SceneLoader : MonoBehaviour
     {
-        public void LoadScene(SceneConfig cfg, LoadSceneMode mode = LoadSceneMode.Single) {
+        public static void LoadScene(SceneConfig cfg, LoadSceneMode mode = LoadSceneMode.Single) {
             Instance.LoadScene(cfg, mode);
         }
 
-        public void UnloadAdditiveScene(SceneConfig cfg) {
+        public static void UnloadAdditiveScene(SceneConfig cfg) {
             Instance.UnloadAdditiveScene(cfg);
         }
 
@@ -21,7 +21,7 @@ namespace HH.DataDrivenScene
                 if (instance == null) {
                     var helper = FindObjectOfType<SceneLoader>();
                     if (helper == null) {
-                        var prefab = Resources.Load("SceneLoaderHelper", typeof(SceneLoader));
+                        var prefab = Resources.Load("DataDrivenSceneLoader", typeof(SceneLoader));
                         helper = Instantiate(prefab) as SceneLoader;
                     }
                     DontDestroyOnLoad(helper.gameObject);
