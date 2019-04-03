@@ -13,16 +13,19 @@ namespace HH.DataDrivenScene.Core
         {
             public SceneConfig cfg;
             public ISceneController ctrler;
-            public HashSet<int> scenesNeedLoaded;
+            public HashSet<int> scenesWaitToLoaded;
         }
 
-        List<RuntimeData> currentScene = new List<RuntimeData>();
+        List<RuntimeData> runtimeData;
+        int[] sceneNeeded;
         IDataDispatcher dispatcher;
         DataDrivenViewHub viewHub;
 
         public DataDrivenSceneHub(MonoBehaviour monoBehaviour) : this(new DataDispatcher(monoBehaviour)) {}
 
         public DataDrivenSceneHub(IDataDispatcher viewModelDispatcher) {
+            runtimeData = new List<RuntimeData>();
+            sceneNeeded = new int[SceneManager.sceneCountInBuildSettings];
             dispatcher = viewModelDispatcher;
             viewHub = new DataDrivenViewHub();
             SceneManager.sceneLoaded += OnSceneLoaded;
@@ -31,35 +34,42 @@ namespace HH.DataDrivenScene.Core
         }
 
         public void LoadScene(SceneConfig cfg, LoadSceneMode mode = LoadSceneMode.Single) {
-            IEnumerable<int> scenes = cfg.scenesBuildIdx;
             if (mode == LoadSceneMode.Single) {
                 dispatcher.Reset();
-                currentScene.Clear();
-            } else {
-                // 避免重复加载子场景
-                scenes = scenes.Where(s => !SceneManager.GetSceneByBuildIndex(s).isLoaded);
+                runtimeData.Clear();
+                Array.Clear(sceneNeeded, 0, sceneNeeded.Length);
             }
-            currentScene.Add(new RuntimeData {
+            var scenesWaitToLoaded = new HashSet<int>();
+            for (int i = 0; i < cfg.scenesBuildIdx.Length; i++) {
+                var scene = cfg.scenesBuildIdx[i];
+                if (sceneNeeded[scene] == 0) {
+                    scenesWaitToLoaded.Add(scene);
+                    SceneManager.LoadScene(scene, i == 0 ? mode : LoadSceneMode.Additive);
+                } else if (!SceneManager.GetSceneByBuildIndex(scene).isLoaded) {
+                    scenesWaitToLoaded.Add(scene);
+                }
+                sceneNeeded[scene]++;
+            }
+            runtimeData.Add(new RuntimeData {
                 cfg = cfg,
                 ctrler = cfg.GetCtrler(),
-                scenesNeedLoaded = new HashSet<int>(scenes),
+                scenesWaitToLoaded = scenesWaitToLoaded,
             });
-            for (int i = 0; i < cfg.scenesBuildIdx.Length; i++) {
-                SceneManager.LoadScene(cfg.scenesBuildIdx[i], i == 0 ? mode : LoadSceneMode.Additive);
-            }
         }
 
         public void UnloadAdditiveScene(SceneConfig cfg) {
-            var idx = currentScene.FindIndex(s => s.cfg == cfg);
+            var idx = runtimeData.FindIndex(s => s.cfg == cfg);
             if (idx < 0) {
                 return;
             }
-            var needUnload = currentScene[idx];
-            currentScene.Remove(needUnload);
+            var needUnload = runtimeData[idx];
+            runtimeData.Remove(needUnload);
             dispatcher.StopDispatch(needUnload.ctrler);
             foreach (var buildIdx in needUnload.cfg.scenesBuildIdx) {
-                // TODO: 避免卸载同时被其他场景依赖的子场景。
-                SceneManager.UnloadSceneAsync(buildIdx, UnloadSceneOptions.UnloadAllEmbeddedSceneObjects);
+                sceneNeeded[buildIdx]--;
+                if (sceneNeeded[buildIdx] == 0) {
+                    SceneManager.UnloadSceneAsync(buildIdx);
+                }
             }
         }
 
@@ -79,10 +89,10 @@ namespace HH.DataDrivenScene.Core
                     }
                 }
             }
-            foreach (var sceneData in currentScene) {
+            foreach (var sceneData in runtimeData) {
                 sceneData.ctrler.OnSceneLoaded(scene);
-                if (sceneData.scenesNeedLoaded.Remove(scene.buildIndex)) {
-                    if (sceneData.scenesNeedLoaded.Count == 0) {
+                if (sceneData.scenesWaitToLoaded.Remove(scene.buildIndex)) {
+                    if (sceneData.scenesWaitToLoaded.Count == 0) {
                         dispatcher.StartDispatch(sceneData.ctrler, sceneData.ctrler.QueueToDispatch, viewHub.Dispatch);
                     }
                 }
@@ -98,7 +108,7 @@ namespace HH.DataDrivenScene.Core
                 }
                 return rm;
             });
-            foreach (var sceneData in currentScene) {
+            foreach (var sceneData in runtimeData) {
                 sceneData.ctrler.OnSceneUnloaded(scene);
             }
         }
